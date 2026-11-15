@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>One Latent World</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="A LiDAR world model that generates one spatial latent of the scene and decodes it along the rays of each target LiDAR.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<meta name="theme-color" content="#0b1118">
+<script>let t=null;try{t=localStorage.getItem('olw-theme')}catch(e){}document.documentElement.dataset.theme=t||'dark';</script>
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<!--BODY-->
+<nav class="top" aria-label="Sections">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="One Latent World, back to top">
+      <svg class="mark" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="2.4" fill="currentColor"/><path d="M6.5 13a6.5 6.5 0 0 1 13 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M2.5 13a10.5 10.5 0 0 1 21 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="1.6 2.6"/><path d="M6.5 13a6.5 6.5 0 0 0 13 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".45"/></svg>
+      <span class="wm">One Latent <span>World</span></span>
+    </a>
+    <div class="links">
+      <a href="#video">Overview</a><a href="#idea">Idea</a><a href="#results">Results</a><a href="#method">Model</a><a href="#cite">Cite</a>
+      <i class="ind" aria-hidden="true"></i>
+    </div>
+    <button class="theme" id="theme" type="button" aria-label="Switch theme" title="Switch theme">
+      <svg class="moon" width="17" height="17" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+      <svg class="sun" width="17" height="17" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>
+    </button>
+  </div>
+</nav>
+
+<header class="cover" id="top">
+  <div class="cover-v" role="img" aria-label="Recorded KITTI-360 scans, each encoded once and decoded for five LiDAR scan patterns">
+    <div class="cgrid" id="cgrid"></div>
+  </div>
+  <div class="cover-shade"></div>
+  <div class="wrap cover-in">
+    <h1><span class="ac">One Latent World</span> for Heterogeneous LiDARs</h1>
+    <p class="tagline">A scan-pattern-agnostic 4D world model via direct ray decoding</p>
+    <p class="authors">Minwoo Jung<sup>1</sup>, Dongjae Lee<sup>1</sup>, DongGuw Lee<sup>1</sup>, Yeong Sang Park<sup>2</sup>, Maurice Fallon<sup>3</sup>, Ayoung Kim<sup>1</sup><br><span><sup>1</sup>Seoul National University &nbsp;·&nbsp; <sup>2</sup>Korea Institute of Machinery &amp; Materials &nbsp;·&nbsp; <sup>3</sup>University of Oxford</span></p>
+    <div class="btns">
+      <a class="btn primary" href="#" data-pending="paper">Paper</a>
+      <a class="btn" href="#" data-pending="pdf">PDF</a>
+      <a class="btn" aria-disabled="true" tabindex="-1">Code <small>Coming soon</small></a>
+      <a class="btn" href="#video">Video</a>
+      <a class="btn" href="#cite">BibTeX</a>
+    </div>
+  </div>
+  <span class="cover-spd">KITTI-360 · five scan patterns</span>
+  <a class="cue" href="#video" aria-label="Go to the overview video">Overview<i></i></a>
+</header>
+
+<section id="video">
+  <div class="wrap">
+    <p class="kicker">Overview</p>
+    <h2 class="sec">The paper at a glance</h2>
+    <figure class="film"><video data-src="assets/video/overview.mp4" poster="assets/video/overview.jpg" controls playsinline preload="none" aria-label="Overview video"></video></figure>
+  </div>
+</section>
+
+<section id="idea">
+  <div class="wrap">
+    <p class="kicker">The idea</p>
+    <h2 class="sec">One scene latent, decoded for each LiDAR</h2>
+    <p class="lede">One spatial latent per scene. Only the decoder sees the target LiDAR's rays, so the same latent yields scans for any pattern at the same mounting position.</p>
+
+    <figure class="flow rv" id="flow">
+      <div class="fl-row">
+        <div class="fl-col"><div class="fl-view seqv" data-seq="gen_z" data-n="11"></div><p class="fl-lab">Scene latent <span class="mono" data-sigma>noise σ = 1.00</span></p></div>
+        <div class="fl-col"><div class="fl-view seqv" data-seq="gen_x" data-n="10" data-last="gen_hdl64"></div><p class="fl-lab">Decoded with HDL-64E rays</p></div>
+        <div class="fl-five">
+          <div class="fl-t" data-k="hdl64"><img src="assets/m/gen_hdl64.webp" alt="Final latent decoded for HDL-64E" loading="lazy"><i>HDL-64E</i></div>
+          <div class="fl-t" data-k="os2_128"><img src="assets/m/gen_os2_128.webp" alt="Final latent decoded for Ouster OS2-128" loading="lazy"><i>OS2-128</i></div>
+          <div class="fl-t" data-k="vlp16"><img src="assets/m/gen_vlp16.webp" alt="Final latent decoded for Velodyne VLP-16" loading="lazy"><i>VLP-16</i></div>
+          <div class="fl-t" data-k="aeva"><img src="assets/m/gen_aeva.webp" alt="Final latent decoded for Aeva Aeries II" loading="lazy"><i>Aeries II</i></div>
+          <div class="fl-t" data-k="avia"><img src="assets/m/gen_avia.webp" alt="Final latent decoded for Livox Avia" loading="lazy"><i>Avia</i></div>
+          <p class="fl-lab fl-lab5">The final latent, decoded for five LiDARs</p>
+        </div>
+      </div>
+      <div class="fl-steps" aria-hidden="true"><span>Euler step</span><ol><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li><li>7</li><li>8</li><li>9</li><li>10</li></ol></div>
+      <figcaption>Generation in 10 steps from noise. Left: latent. Middle: estimate decoded with HDL-64E rays. Right: final latent, decoded per LiDAR. Top view, 40 m.</figcaption>
+    </figure>
+
+    <p class="note dz-note">Same rays of a new LiDAR, side view (schematic). Red: wrong return, true point circled.</p>
+    <div class="designs">
+      <article class="demo rv"><div class="pic cv"><canvas class="dz" data-k="range" width="800" height="500" aria-label="Side view: rays of a new LiDAR take the range of the nearest training row"></canvas></div>
+        <div class="body"><h4>Range images</h4><p>New rays borrow the nearest pixel of the training raster.</p></div></article>
+      <article class="demo rv" style="--d:90ms"><div class="pic cv"><canvas class="dz" data-k="render" width="800" height="500" aria-label="Side view: rays march through a voxel grid and stop at the first occupied voxel"></canvas></div>
+        <div class="body"><h4>Rendering</h4><p>Rays stop at the first occupied voxel, early or on spurious geometry.</p></div></article>
+      <article class="demo ours rv" style="--d:180ms"><div class="pic cv"><canvas class="dz" data-k="ours" width="800" height="500" aria-label="Side view: each ray is answered directly with a depth or a miss"></canvas></div>
+        <div class="body"><h4><b>Direct ray decoding</b></h4><p>Each ray reads the latent for a depth, then refines it locally. No surface in between.</p></div></article>
+    </div>
+  </div>
+</section>
+
+<section id="results">
+  <div class="wrap">
+    <p class="kicker">Results</p>
+    <h2 class="sec">What one latent can do</h2>
+    <div class="numbers n6" aria-label="Headline results">
+      <div class="num"><p class="nk">Realism</p><div class="v"><span class="n">22–78</span><span class="x">%</span></div><div class="k">lower FPVD than the best baseline (KITTI-360 17.8 vs 22.9, nuScenes 10.6 vs 48.4)</div></div>
+      <div class="num"><p class="nk">Ray decoding</p><div class="v"><span class="n">19–28</span><span class="x">%</span></div><div class="k">lower depth error than the best compared renderer</div></div>
+      <div class="num"><p class="nk">Temporal consistency</p><div class="v"><span class="n">66–72</span><span class="x">%</span></div><div class="k">lower registration error between predicted frames than the best compared world model</div></div>
+      <div class="num"><p class="nk">Scan patterns</p><div class="v"><span class="n">Any</span></div><div class="k">ray set at the same mounting position, rotating or non-repetitive. Tested on four HeLiPR LiDARs and PandarGT, none seen in training.</div></div>
+      <div class="num"><p class="nk">Downstream</p><div class="v"><span class="n">10.5→53.5</span></div><div class="k">car 3D AP on PandarGT, trained on raw scans → on our predicted scans. HeLiPR place recognition: R@1 51.0 → 67.8.</div></div>
+      <div class="num"><p class="nk">Speed</p><div class="v"><span class="n">1.3</span><span class="x">s</span></div><div class="k">one scene and its scans for four LiDARs, one RTX 3090</div></div>
+    </div>
+
+    <article class="block">
+      <h3><span>Scan patterns</span>One prediction, five scan patterns</h3>
+      <p class="lede">Three observed scans and the future motion in, 2 s of predicted latents out, each decoded for every LiDAR.</p>
+      <figure class="v3m" id="v3-pred">
+        <div class="ctl">
+          <button class="btn sm" type="button" data-play aria-label="Play or pause">Pause</button>
+          <input type="range" min="0" max="9" step="1" value="0" data-t aria-label="Time after the last observed scan">
+          <span class="mono tlab" data-tl>t = +0.2 s</span>
+          <button class="btn sm" type="button" data-home>Top view</button>
+        </div>
+        <div class="v3m-wrap"><canvas aria-label="Six synchronized 3D views of the recorded and predicted scans"></canvas>
+          <span class="lab" style="--i:0">Recorded · HDL-64E</span><span class="lab ours" style="--i:1">Predicted · HDL-64E</span><span class="lab ours" style="--i:2">Predicted · OS2-128</span>
+          <span class="lab ours" style="--i:3">Predicted · VLP-16</span><span class="lab ours" style="--i:4">Predicted · Aeries II</span><span class="lab ours" style="--i:5">Predicted · Avia</span>
+        </div>
+        <figcaption>Top view, 32 m, every 0.2 s. Drag to rotate all six. Avia rays change per scan, as on the real sensor.</figcaption>
+      </figure>
+      <div class="duo d1">
+      <figure class="v3d" id="v3-fig6" data-kind="fig6">
+        <div class="ctl">
+          <div class="grp"><em>Compare</em><div class="seg" data-g="m" role="group" aria-label="Method on the left"><button type="button" data-v="real" aria-pressed="false">Reference</button><button type="button" data-v="t2ldmpp_n" aria-pressed="false">T2LDM++</button><button type="button" data-v="uniscene" aria-pressed="false">UniScene</button><button type="button" data-v="opendwm" aria-pressed="true">OpenDWM</button><button type="button" data-v="lidardm" aria-pressed="false">LidarDM</button></div></div>
+          <div class="grp"><em>Pattern</em><div class="seg" data-g="s" role="group" aria-label="Scan pattern"><button type="button" data-v="ouster" aria-pressed="true">OS2-128</button><button type="button" data-v="velodyne" aria-pressed="false">VLP-16</button><button type="button" data-v="aeva" aria-pressed="false">Aeries II</button><button type="button" data-v="avia" aria-pressed="false">Avia</button></div></div>
+        </div>
+        <div class="v3-row">
+          <div class="v3-cv"><canvas aria-label="3D view of the compared method's scan"></canvas><span class="lab" data-l="0"></span><span class="v3-msg" hidden></span></div>
+          <div class="v3-cv"><canvas aria-label="3D view of our scan"></canvas><span class="lab ours">Ours</span></div>
+        </div>
+        <figcaption>Each method's own generated scene, scanned with four unseen HeLiPR patterns. T2LDM++ has no Avia output. <i>Reference</i>: real HeLiPR scans. Drag to pan, scroll to zoom.</figcaption>
+      </figure>
+      <figure class="chart spot" id="ch-time">
+        <p class="ct">Time for one scene and four scans</p>
+        <div class="plot"></div>
+        <figcaption>Scene + four scans, one RTX 3090, log scale. Click a bar to compare that method.</figcaption>
+      </figure>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span>Ray accuracy</span>Decoding masked rays</h3>
+      <p class="lede">Real scans of a new LiDAR also differ in city, vehicle and mounting, so they cannot isolate the scan pattern. Instead, we hide the VLP-16 rows or Avia cells of a real scan and score each method on exactly these rays. Occupancy and NKSR meshes still see the hidden region.</p>
+      <div class="ctl-row" id="ro-mask"><em>Masked</em><div class="seg" data-g="mask" role="group" aria-label="Masked rays"><button type="button" data-v="vlp16" aria-pressed="true">VLP-16 rows</button><button type="button" data-v="avia" aria-pressed="false">Avia cells</button></div></div>
+      <div class="duo">
+      <div class="viewer spot" id="readout">
+        <div class="ctl">
+          
+          <div class="grp"><em>Readout</em><div class="seg" data-g="m" role="group" aria-label="Method"><button type="button" data-v="occupancy_ssc0.2" aria-pressed="false">Occupancy</button><button type="button" data-v="mesh_nksr" aria-pressed="false">NKSR mesh</button><button type="button" data-v="opendwm_render" aria-pressed="false">OpenDWM</button><button type="button" data-v="ours" aria-pressed="true">Ours</button></div></div>
+        </div>
+        <div class="view"><span class="lab ours" id="ro-lab">Ours · ray decoder</span>
+          <div class="scale"><i></i><span><b>0 m</b><b>0.5 m</b></span></div>
+        </div>
+        <p class="foot">Gray: input. Color: distance to the measured return (cap 0.5 m).</p>
+      </div>
+      <figure class="chart spot" id="ch-dmae">
+        <p class="ct">Depth error on masked rays <span>dMAE, m</span></p>
+        <div class="plot"></div>
+        <figcaption>KITTI-360, paper Table 4. Click a bar to view that readout.</figcaption>
+      </figure>
+      </div>
+    </article>
+
+    <article class="block">
+      <h3><span>Given motion</span>Sequence prediction with given motion</h3>
+      <p class="lede">Past latents are warped by the given motion before each frame is predicted. Registration error between predicted frames: 66–72% lower than the best compared world model.</p>
+      <div class="ctl-row"><em>KITTI-360 drive 0002</em><div class="seg" id="seq-pick" role="group" aria-label="Sample"><button type="button" data-v="seqp_0002_15062" aria-pressed="true">A</button><button type="button" data-v="seqp_0002_14498" aria-pressed="false">B</button><button type="button" data-v="seqp_0002_9565" aria-pressed="false">C</button><button type="button" data-v="seqp_0002_5203" aria-pressed="false">D · moving car</button><button type="button" data-v="seqp_0002_13582" aria-pressed="false">E · oncoming car</button><button type="button" data-v="seqp_0002_5307" aria-pressed="false">F</button><button type="button" data-v="cf" aria-pressed="false">G · two paths</button></div></div>
+      <div class="clips c2" id="seq-clips">
+        <figure class="clip"><video data-src="assets/video/seqp_0002_15062_measured.mp4" poster="assets/video/seqp_0002_15062_measured.jpg" muted loop playsinline preload="none" aria-label="Recorded future"></video><span class="lab">Recorded future</span><span class="spd">0.5×</span></figure>
+        <figure class="clip"><video data-src="assets/video/seqp_0002_15062_hdl64.mp4" poster="assets/video/seqp_0002_15062_hdl64.jpg" muted loop playsinline preload="none" aria-label="Predicted future"></video><span class="lab ours">Predicted future</span><span class="spd">0.5×</span></figure>
+        <figure class="clip" data-g hidden><video muted loop playsinline preload="none" aria-label="Predicted future with a left lane change"></video><span class="lab ours">Predicted · lane change</span><span class="spd">0.5×</span></figure>
+      </div>
+      <p class="cap" id="seq-cf-note" hidden>Same observed scans and initial noise; only the given ego path differs (a 2.5 m left lane change). Structure precision of the lane-change prediction at 0.2 m: 1.00 / 0.98 / 0.97 / 0.93 at 0.5 / 1 / 1.5 / 2 s.</p>
+    </article>
+
+    <article class="block">
+      <h3><span>Layout</span>Generation from a box layout</h3>
+      <p class="lede">A scene generated from 3D boxes alone (plus an HD map on nuScenes), next to the recorded scan of that layout.</p>
+      <figure class="v3d" id="v3-cond" data-kind="cond">
+        <div class="ctl">
+          <div class="grp"><em>Dataset</em><div class="seg" data-g="ds" role="group" aria-label="Dataset"><button type="button" data-v="k" aria-pressed="true">KITTI-360</button><button type="button" data-v="n" aria-pressed="false">nuScenes</button></div></div>
+          <div class="grp"><em>Sample</em><div class="seg" data-g="i" role="group" aria-label="Sample"><button type="button" data-v="0" aria-pressed="true">1</button><button type="button" data-v="1" aria-pressed="false">2</button><button type="button" data-v="2" aria-pressed="false">3</button><button type="button" data-v="3" aria-pressed="false">4</button></div></div>
+        </div>
+        <div class="v3-row">
+          <div class="v3-cv"><canvas aria-label="3D view of the recorded reference scan with the layout boxes"></canvas><span class="lab">Reference · recorded scan</span></div>
+          <div class="v3-cv"><canvas aria-label="3D view of the scan generated from the layout"></canvas><span class="lab ours">Generated from the layout</span></div>
+        </div>
+        <figcaption>Orange: the given boxes. nuScenes also gets the HD map: drivable area (blue), dividers (yellow), crossings (white). Native LiDAR pattern.</figcaption>
+      </figure>
+    </article>
+
+    <article class="block">
+      <h3><span>Editing</span>Editing the future layout</h3>
+      <p class="lede">Edit the future boxes, and the prediction follows, in any scan pattern.</p>
+      <figure class="v3d" id="v3-edit" data-kind="edit" data-sc="kitti_d">
+        <div class="ctl">
+          <div class="grp"><em>Edit</em><div class="seg" data-g="e" role="group" aria-label="Edit"><button type="button" data-v="rm" aria-pressed="true">Remove a car</button><button type="button" data-v="add" aria-pressed="false">Add a car</button></div></div>
+          <div class="grp"><em>Pattern</em><div class="seg" data-g="p" role="group" aria-label="Scan pattern"><button type="button" data-v="native" aria-pressed="true">Native</button><button type="button" data-v="Ouster" aria-pressed="false">OS2-128</button><button type="button" data-v="Velodyne" aria-pressed="false">VLP-16</button><button type="button" data-v="Aeva" aria-pressed="false">Aeries II</button><button type="button" data-v="Avia" aria-pressed="false">Avia</button></div></div>
+        </div>
+        <div class="v3-row">
+          <div class="v3-cv"><canvas aria-label="3D view of the prediction with the original layout"></canvas><span class="lab">Original layout</span></div>
+          <div class="v3-cv"><canvas aria-label="3D view of the prediction with the edited layout"></canvas><span class="lab ours" data-l="1">Car removed</span></div>
+        </div>
+        <figcaption>Same inputs and noise, original vs. edited boxes. Red: removed car. Green: added car (points enlarged).</figcaption>
+      </figure>
+    </article>
+
+    <article class="block">
+      <h3><span>Downstream</span>Downstream training without target-sensor data</h3>
+      <p class="lede">Predicted scans, decoded for the target LiDAR, are the only training data from that sensor: no recorded points, no labels.</p>
+      <div class="dtask rv">
+        <div class="dv">
+          <figure class="clip v4"><canvas class="lpr" data-arm="r" width="960" height="720" aria-label="Avia queries along the drive, colored by whether the top-1 match is correct, model trained on raw scans"></canvas><span class="lab">Trained on raw nuScenes scans</span></figure>
+          <figure class="clip v4"><canvas class="lpr" data-arm="o" width="960" height="720" aria-label="Avia queries along the drive, colored by whether the top-1 match is correct, model trained on our predicted scans"></canvas><span class="lab ours">Trained on our predicted scans</span></figure>
+        </div>
+        <div class="dt">
+          <h4>Place recognition</h4>
+          <p>HeLiOS on HeLiPR Roundabout. Queries vs. an OS2-128 database.</p>
+          <div class="ctl-row"><em>Query</em><div class="seg" id="lpr-sen" role="group" aria-label="Query LiDAR"><button type="button" data-v="Avia" aria-pressed="true">Avia</button><button type="button" data-v="Aeva" aria-pressed="false">Aeries II</button><button type="button" data-v="VLP-16" aria-pressed="false">VLP-16</button></div></div>
+          <div class="ctl-row"><em>Drive</em><div class="seg" id="lpr-seq" role="group" aria-label="Query drive"><button type="button" data-v="Roundabout01" aria-pressed="false">01</button><button type="button" data-v="Roundabout02" aria-pressed="false">02</button><button type="button" data-v="Roundabout03" aria-pressed="true">03</button></div></div>
+          <div class="keys"><span><i style="background:#3FBF6F"></i>correct top-1</span><span><i style="background:#E2322B"></i>wrong top-1</span><span><i style="background:#5A6673"></i>database</span></div>
+          <div class="sr2" id="lpr-r1"><em>Recall@1 (%), drive 03, Avia queries</em><div class="b"><i style="width:27.7%"></i><span>27.7</span></div><div class="b ours"><i style="width:55.9%"></i><span>55.9</span></div></div>
+        </div>
+      </div>
+      <div class="dtask rv" id="ds-mos">
+        <div class="dv sync">
+          <figure class="clip"><video data-src="assets/video/ds/mos_os2a_input.mp4" poster="assets/video/ds/mos_os2a_input.jpg" muted loop playsinline preload="none" aria-label="Consecutive HeLiMOS input scans"></video><span class="lab">Input scans</span></figure>
+          <figure class="clip"><video data-src="assets/video/ds/mos_os2a_cmp.mp4" poster="assets/video/ds/mos_os2a_cmp.jpg" muted loop playsinline preload="none" aria-label="Per-point comparison of the released 4DMOS and 4DMOS fine-tuned with our predicted scans"></video><span class="lab">Released vs. ours</span></figure>
+        </div>
+        <div class="dt">
+          <h4>Moving object segmentation</h4>
+          <p>4DMOS on HeLiMOS, delayed mode. One 5 s drive, four LiDARs.</p>
+          <div class="ctl-row"><em>Case</em><div class="seg ds-pick" data-pre="mos" role="group" aria-label="MOS case"><button type="button" data-v="os2a" aria-pressed="true">OS2-128</button><button type="button" data-v="avia" aria-pressed="false">Avia</button><button type="button" data-v="aeva" aria-pressed="false">Aeries II</button><button type="button" data-v="vlp16" aria-pressed="false">VLP-16</button></div></div>
+          <div class="keys"><span><i style="background:#3FE03F"></i>ours only</span><span><i style="background:#F59A86"></i>released only</span><span><i style="background:#4A72E8"></i>both</span><span><i style="background:#4A525C"></i>static</span></div>
+          <p class="cnt" id="mos-cnt"></p>
+          <div class="sr2" id="mos-b1"><em>Moving IoU, OS2-128 test split</em><div class="b"><i style="width:72%"></i><span>72.0</span></div><div class="b ours"><i style="width:78.1%"></i><span>78.1</span></div></div>
+        </div>
+      </div>
+      <div class="dtask rv">
+        <div class="dv sync">
+          <figure class="clip"><video data-src="assets/video/ds/det_016_raw.mp4" poster="assets/video/ds/det_016_raw.jpg" muted loop playsinline preload="none" aria-label="Car detection on a PandaSet PandarGT scene by a detector trained on raw scans"></video><span class="lab">Trained on raw nuScenes scans</span></figure>
+          <figure class="clip"><video data-src="assets/video/ds/det_016_ours.mp4" poster="assets/video/ds/det_016_ours.jpg" muted loop playsinline preload="none" aria-label="Car detection on a PandaSet PandarGT scene by a detector trained on our predicted scans"></video><span class="lab ours">Trained on our predicted scans</span></figure>
+        </div>
+        <div class="dt">
+          <h4>Car detection</h4>
+          <p>Voxel R-CNN on PandaSet PandarGT. Detections with score ≥ 0.2.</p>
+          <div class="ctl-row"><em>Scene</em><div class="seg ds-pick" data-pre="det" role="group" aria-label="PandaSet scene"><button type="button" data-v="016" aria-pressed="true">016</button><button type="button" data-v="028" aria-pressed="false">028</button><button type="button" data-v="042" aria-pressed="false">042</button><button type="button" data-v="072" aria-pressed="false">072</button><button type="button" data-v="086" aria-pressed="false">086</button></div></div>
+          <div class="keys"><span><i style="background:#3FBF6F"></i>detected car</span></div>
+          <div class="sr2" id="det-b1"><em>Cars found (%), scene 016</em><div class="b"><i style="width:13.8%"></i><span>13.8</span></div><div class="b ours"><i style="width:64.1%"></i><span>64.1</span></div></div>
+          <div class="sr2" id="det-b2"><em>Precision (%), scene 016</em><div class="b"><i style="width:89.1%"></i><span>89.1</span></div><div class="b ours"><i style="width:97.1%"></i><span>97.1</span></div></div>
+          <p class="cnt">Scored cars, score ≥ 0.2. Over all 35 test scenes: 3D AP 10.5 → 53.5.</p>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section id="method">
+  <div class="wrap">
+    <p class="kicker">How it works</p>
+    <h2 class="sec">Encode, predict, decode</h2>
+    <p class="lede">Encode to a spatial latent, predict latents, decode the target LiDAR's rays.</p>
+    
+
+    <article class="mstep">
+      <div class="mrow">
+        <div class="step-txt">
+          <h3><span>Encode</span>Encode every scan on one grid</h3>
+          <p>Any scan is binned on one hybrid cylindrical-spherical (HCS) grid, 80 × 160 × 640 cells up to 80 m. Each cell stores occupancy, point count and mean radial offset.</p>
+          <p>Elevation folds into channels. Each latent position is a fixed region around the sensor, <b>not an input beam</b>.</p>
+        </div>
+        <div class="eqn">$$\rho=\sqrt{x^2+y^2},\quad \theta=\operatorname{atan2}(y,x),\quad \phi=\operatorname{atan2}(z,\rho)$$$$\mathbf z_t=E(\mathbf P_t)\in\mathbb R^{80\times80\times32}$$</div>
+      </div>
+      <figure class="anim" id="enc-anim">
+        <div class="sg sg4 seq">
+          <div class="cell"><div class="an-view"><img class="sA" src="assets/m/enc_points.webp" alt="Recorded KITTI-360 scan, top view" loading="lazy"></div><p class="fl-lab">Scan</p></div>
+          <div class="cell"><div class="an-view"><img class="sA" src="assets/m/enc_points.webp" alt="" loading="lazy"><img class="sB" src="assets/m/enc_cells.webp" alt="Occupied HCS cells of the scan, top view" loading="lazy"><canvas class="grid-ov" width="1200" height="1200" aria-hidden="true"></canvas></div><p class="fl-lab">HCS cells <span>ρ, θ, φ</span></p></div>
+          <div class="cell"><div class="an-view"><img class="sA" src="assets/m/enc_cells.webp" alt="" loading="lazy"><img class="sB" src="assets/m/enc_z.webp" alt="The encoded latent on its radius-azimuth grid" loading="lazy"></div><p class="fl-lab">Latent <span>z = E(P)</span></p></div>
+          <div class="cell"><div class="an-view"><canvas class="unroll" width="1200" height="1200" aria-label="The latent unrolled from the polar disc into an 80 by 80 grid"></canvas></div><p class="fl-lab">Unrolled <span>80 × 80 × 32</span></p></div>
+        </div>
+        <figcaption>Scan 1700, top view, 40 m. Radius and azimuth stay as latent axes, so the latent unrolls into an 80 × 80 grid.</figcaption>
+      </figure>
+    </article>
+
+    <article class="mstep">
+      <div class="mrow">
+        <div class="step-txt">
+          <h3><span>Predict</span>Generate and predict latents</h3>
+          <p>A diffusion transformer $F_\psi$ (rectified flow, 10 Euler steps) generates latents, conditioned on boxes and HD maps on the $(\rho,\theta)$ grid.</p>
+          <p>Past latents are warped by the ego pose $\mathbf T$; inside tracked boxes by the box motion $\mathbf B_{\mathrm{ref}}\mathbf B^{-1}$, so <b>objects move with their boxes</b>.</p>
+                  </div>
+        <div class="eqn">$$\mathbf z_\sigma=(1-\sigma)\,\mathbf z+\sigma\boldsymbol\epsilon,\qquad \hat{\mathbf z}_0=\mathbf z_\sigma-\sigma\,\mathbf v_\psi(\mathbf z_\sigma,\sigma;\tilde{\mathbf z}_{\mathrm{ref}},\mathbf c)$$$$\tilde{\mathbf z}_{\mathrm{ref}}(\rho,\theta)=\operatorname{Bilinear}\big(\mathbf z_{\mathrm{ref}},\,\pi(\mathbf T\,\mathbf x_{\rho\theta})\big)$$</div>
+      </div>
+      <figure class="anim" id="den-anim">
+        <div class="sg sg3">
+          <div class="cell"><div class="an-view seqv" data-seq="pred_z" data-n="11"></div><p class="fl-lab">Future latent <span class="mono" data-sigma>noise σ = 1.00</span></p></div>
+          <div class="cell"><div class="an-view seqv" data-seq="pred_x" data-n="11"></div><p class="fl-lab">Clean estimate, decoded</p></div>
+          <div class="cell txt"><p><b>Denoising.</b> The latent 1.0 s ahead, from noise in 10 steps; its estimate decoded per step.</p><div class="an-meter"><i><b></b></i></div></div>
+        </div>
+        <div class="sg sg3">
+          <div class="cell"><div class="an-view"><canvas id="warp-cv" width="600" height="600" aria-label="Animation: each cell of a reference latent moves from where it was stored to where the target frame needs it"></canvas><span class="an-lab" id="warp-lab"></span></div><p class="fl-lab">Reference → aligned <span>real warp</span></p></div>
+          <div class="cell"><div class="an-view"><img src="assets/m/warp_tgt.webp" alt="The predicted latent of the target frame" loading="lazy"></div><p class="fl-lab">Predicted <span>t</span></p></div>
+          <div class="cell txt"><p><b>Aligning a reference.</b> Each cell of a 0.5 s-old latent moves to the target frame: blue with the ego motion, orange with its car box. Arrows: the paths of the ego and the moving cars over the 0.5 s. Dashed squares: where a moving car would land with ego motion alone.</p></div>
+        </div>
+      </figure>
+    </article>
+
+    <article class="mstep">
+      <div class="mrow">
+        <div class="step-txt">
+          <h3><span>Decode</span>Decode the rays of the target LiDAR</h3>
+          <p>Only the decoder gets the target rays $\mathcal R^s$. Each ray attends to the whole latent and predicts a hit probability $p_i$ and a preliminary depth $d^0_i$ (bin + offset).</p>
+          <p>Local features at $\mathbf x_i=d^0_i\mathbf r_i$ refine it to $\hat d_i$. <b>No surface or field in between.</b></p>
+        </div>
+        <div class="eqn">$$\hat{\mathbf P}^{s}_{t+1}=D\big(\hat{\mathbf z}_{t+1},\,\mathcal R^{s}\big)$$$$d^0_i=g(a_i),\qquad \hat d_i=g(a_i+\delta_i)$$</div>
+      </div>
+      <figure class="anim insp" id="insp">
+        <div class="in-row">
+          <div class="an-view sq"><canvas width="1200" height="1200" aria-label="Top view of the predicted latent with the selected VLP-16 ray, its attention and its depths"></canvas><span class="an-lab" id="in-lab"></span></div>
+          <div class="in-side">
+            <div class="seg" role="group" aria-label="Ray"></div>
+            <div class="in-plot"></div>
+            <dl class="in-vals"></dl>
+          </div>
+        </div>
+        <figcaption>Six VLP-16 rays on a latent predicted 1.0 s ahead. Orange: attention (block 4 of 6). Hollow: $d^0_i$. Green: $\hat d_i$. White ring: recorded return.</figcaption>
+      </figure>
+      <div class="cards c4">
+        <article class="demo"><div class="body"><h4>Global depth</h4><p>Attention over the latent gives $p_i$ and a log-scale depth, 2.4–72 m.</p></div></article>
+        <article class="demo"><div class="body"><h4>Local refinement</h4><p>Features at $d^0_i$ correct it, even across bins.</p></div></article>
+        <article class="demo"><div class="body"><h4>Independent rays</h4><p>A ray's output depends only on its direction, not on other rays.</p></div></article>
+        <article class="demo"><div class="body"><h4>Hits and misses</h4><p>Rays are labeled hit (depth) or miss. Aggregated scans and random patterns widen supervision.</p></div></article>
+      </div>
+    </article>
+
+    <article class="mstep">
+      <div class="mrow">
+        <div class="step-txt">
+          <h3><span>Train</span>Train on hits and misses</h3>
+          <p>Decoder: focal loss on hits and misses, cross-entropy on the depth bin, Smooth-$\ell_1$ on depth.</p>
+          <p>World model: latent loss, plus a ray loss through the frozen decoder at low noise.</p>
+        </div>
+        <div class="eqn">$$\mathcal L_{\mathrm{AE}}=\lambda_h\mathcal L_{\mathrm{hit}}+\lambda_b\mathcal L_{\mathrm{bin}}+\lambda_d\mathcal L_{\mathrm{depth}}+\lambda_{\mathrm{KL}}\mathcal L_{\mathrm{KL}}$$$$\mathcal L_{\mathrm{WM}}=\mathbb E\big[\|\hat{\mathbf z}_0-\mathbf z\|_2^2\big]+\lambda_r\mathcal L_{\mathrm{ray}}$$</div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section id="cite">
+  <div class="wrap">
+    <p class="kicker">Cite</p>
+    <div class="cite-row"><h2 class="sec" style="margin:0">Cite this work</h2><button class="btn" id="copy-bib" type="button">Copy</button></div>
+<pre class="bib" id="bib">@misc{onelatentworld2026,
+  title  = {One Latent World for Heterogeneous {LiDARs}: A Scan-Pattern-Agnostic {4D} World Model via Direct Ray Decoding},
+  author = {Jung, Minwoo and Lee, Dongjae and Lee, DongGuw and Park, Yeong Sang and Fallon, Maurice and Kim, Ayoung},
+  year   = {2026}
+}</pre>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Code and pretrained models will be released.</span>
+    <a href="#top">Back to top</a>
+  </div>
+</footer>
+<div class="lb" id="lb" hidden><img id="lb-img" alt=""></div>
+<!--/BODY-->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script defer src="assets/js/site.js"></script>
+</body>
+</html>
