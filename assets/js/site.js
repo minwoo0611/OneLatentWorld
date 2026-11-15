@@ -715,13 +715,20 @@
   /* ---------- sequence prediction: sample picker (G = same scene, two given paths, three clips) ---------- */
   (function seqPick() {
     const seg = $('#seq-pick'), g = $('#seq-clips'); if (!seg || !g) return;
-    const figs = $$('figure', g), vs = figs.map(f => $('video', f)), labs = figs.map(f => $('.lab', f)), cap = $('#seq-cf-note');
+    const figs = $$('figure', g), vs = figs.map(f => $('video', f)), labs = figs.map(f => $('.lab', f)), cap = $('#seq-cf-note'), icap = $('#seq-int-note'), ccap = $('#seq-car-note');
     const set = (v, src) => { v.poster = src + '.jpg'; v.dataset.src = src + '.mp4'; v.src = v.dataset.src; const p = v.play(); if (p) p.catch(() => {}); };
+    const L = { cf: ['Recorded future', 'Predicted · recorded path', 'Predicted · lane change'], int: ['Predicted · left turn', 'Predicted · straight', 'Predicted · right turn (recorded path)'],
+                car: ['Predicted · car stops (recorded boxes)', 'Predicted · car goes straight', 'Predicted · car turns right'], one: ['Recorded future', 'Predicted future', ''] };
     $$('button', seg).forEach(b => b.addEventListener('click', () => {
       $$('button', seg).forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-      const cf = b.dataset.v === 'cf'; figs[2].hidden = !cf; g.classList.toggle('c2', !cf); if (cap) cap.hidden = !cf;
-      if (cf) { ['cf_recorded', 'cf_pred_rec', 'cf_pred_alt'].forEach((t, i) => set(vs[i], `assets/video/${t}`)); labs[1].textContent = 'Predicted · recorded path'; }
-      else { ['measured', 'hdl64'].forEach((m, i) => set(vs[i], `assets/video/${b.dataset.v}_${m}`)); labs[1].textContent = 'Predicted future'; }
+      const v = b.dataset.v, three = v === 'cf' || v === 'int' || v === 'car', mode = three ? v : 'one';
+      figs[2].hidden = !three; g.classList.toggle('c2', !three); if (cap) cap.hidden = v !== 'cf'; if (icap) icap.hidden = v !== 'int'; if (ccap) ccap.hidden = v !== 'car';
+      if (v === 'cf') ['cf_recorded', 'cf_pred_rec', 'cf_pred_alt'].forEach((t, i) => set(vs[i], `assets/video/${t}`));
+      else if (v === 'int') ['int_left', 'int_straight', 'int_right'].forEach((t, i) => set(vs[i], `assets/video/${t}`));
+      else if (v === 'car') ['int_car_rec', 'int_car_straight', 'int_car_right'].forEach((t, i) => set(vs[i], `assets/video/${t}`));
+      else ['measured', 'hdl64'].forEach((m, i) => set(vs[i], `assets/video/${v}_${m}`));
+      labs.forEach((l, i) => { if (L[mode][i]) l.textContent = L[mode][i]; });
+      labs[0].classList.toggle('ours', v === 'int' || v === 'car');    // the first panel is a prediction only in H and I
     }));
   })();
 
