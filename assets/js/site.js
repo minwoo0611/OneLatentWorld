@@ -235,8 +235,8 @@
   drawCharts();
   let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => drawCharts('resize'), 150); });
 
-  /* links that exist only after the review */
-  $$('[data-pending]').forEach(a => { a.title = 'Link added after the review'; a.addEventListener('click', e => e.preventDefault()); });
+  /* links that are not available yet */
+  $$('[data-pending]').forEach(a => { a.addEventListener('click', e => e.preventDefault()); });
 
   /* nav state, progress, active section */
   const nav = $('nav.top'), cover = $('.cover'), prog = $('#progress');
